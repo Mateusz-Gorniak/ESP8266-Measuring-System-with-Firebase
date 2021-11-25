@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <ESP8266WiFi.h>
 #include <Firebase_ESP_Client.h>
+#include <BlueDot_BME280.h>
 //Provide the token generation process info.
 #include "addons/TokenHelper.h"
 //Provide the RTDB payload printing info and other helper functions.
@@ -13,26 +14,36 @@
 #define WIFI_PASSWORD "F56548EE0798580A"
 #define EMAIL ""
 #define PASSWORD ""
-// Insert Firebase project API Key
+
 #define API_KEY "AIzaSyCb8ebThdsGcFKk0XHxxmYez177m-a-pXA"
+
 // Insert RTDB URLefine the RTDB URL */
 #define DATABASE_URL "https://esp-firebase-1903d-default-rtdb.europe-west1.firebasedatabase.app/"
+
+#define dht_pin A0
 
 //Firebase Data Objects
 FirebaseData data;
 FirebaseAuth auth;
 FirebaseConfig config;
 
+//Object of the class BluBlueDot_BME280, instances of sensor bme280
+BlueDot_BME280 bme280 = BlueDot_BME280();
+
 //variables
 bool isFirebaseConnected;
 unsigned long sendDataPrevMillis = 0;
 int c;
+float temp = 0.f;
+float temp1 = 0.f;
+float pres = 0.f;
+float att = 0.f;
 
 void setup()
 {
   //######BASIC SETTINGS##########
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, HIGH);
   //Initialaize Serial
   Serial.begin(115200);
   //Initialize Wi-Fi
@@ -49,6 +60,7 @@ void setup()
   Serial.println(WiFi.localIP());
   Serial.println(WiFi.getMode());
   Serial.println();
+
   //######FIREBASE SETTINGS##########
   //write parameters to Firebase config structure
   config.api_key = API_KEY;
@@ -68,18 +80,47 @@ void setup()
   //Firebase init
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
+
   //######SENSORS SETTINGS##########
-  //
+  /*BMP280*/
+  Serial.println(F("BME280 test"));
+  Wire.begin(0x76);                   //sda scl init I2C interface on 0x76 address (addres of sensor)
+  bme280.parameter.communication = 0; //communication protocol set as I2C
+  bme280.parameter.I2CAddress = 0x76; //Choose I2C Address
+  bme280.parameter.sensorMode = 0b11; //Choose sensor mode as NORMAL
+  /*The IIR (Infinite Impulse Response) filter suppresses high frequency fluctuations
+  In short, a high factor value means less noise, but measurements are also less responsive*/
+  bme280.parameter.IIRfilter = 0b100;         //Setup for IIR Filter
+  bme280.parameter.tempOversampling = 0b101;  //Setup Temperature Ovesampling
+  bme280.parameter.pressOversampling = 0b101; //Setup Pressure Ovesampling
+  bme280.parameter.tempOutsideCelsius = 15;   //default value of 15°C
+  bme280.parameter.tempOutsideFahrenheit = 59;
+  bme280.parameter.pressureSeaLevel = 1013.25; // pressure on sea level in Poland has 1013,25 hPa
+  bme280.init();
 }
 
 void loop()
 {
-  if (Firebase.ready() && isFirebaseConnected && (millis() - sendDataPrevMillis > 6000 || sendDataPrevMillis == 0))
+  if (Firebase.ready() && isFirebaseConnected && (millis() - sendDataPrevMillis > 1000 || sendDataPrevMillis == 0))
   {
     sendDataPrevMillis = millis();
-    if (Firebase.RTDB.setFloat(&data, "Test var", c++))
+    /*BME280 READOUT*/
+    if (Firebase.RTDB.setFloat(&data, "BME280/Temp *C", temp) && Firebase.RTDB.setFloat(&data, "BME280/Temp F", temp1) && Firebase.RTDB.setFloat(&data, "BME280/Pressure hPa", pres) && Firebase.RTDB.setFloat(&data, "BME280/Altitude m", att))
     {
-      Serial.println("PASSED\t");
+      temp = bme280.readTempC();
+      temp1 = bme280.readTempF();
+      pres = bme280.readPressure();
+      att = bme280.readAltitudeMeter();
+      Serial.println("------BME280 readout------");
+      Serial.print("Temp in *C : \t");
+      Serial.print(temp);
+      Serial.print("\tTemp in F : ");
+      Serial.print(temp1);
+      Serial.print("\tPressure: ");
+      Serial.print(pres);
+      Serial.print("\tAltitude: ");
+      Serial.print(att);
+      Serial.println("\t\t->SEND!");
     }
     else
     {
