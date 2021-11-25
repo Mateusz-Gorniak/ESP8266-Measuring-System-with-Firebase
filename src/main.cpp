@@ -4,6 +4,7 @@
 #include <ESP8266WiFi.h>
 #include <Firebase_ESP_Client.h>
 #include <BlueDot_BME280.h>
+#include "DHTesp.h"
 //Provide the token generation process info.
 #include "addons/TokenHelper.h"
 //Provide the RTDB payload printing info and other helper functions.
@@ -20,7 +21,7 @@
 // Insert RTDB URLefine the RTDB URL */
 #define DATABASE_URL "https://esp-firebase-1903d-default-rtdb.europe-west1.firebasedatabase.app/"
 
-#define dht_pin A0
+#define DHTTYPE DHT11 // DHT 11
 
 //Firebase Data Objects
 FirebaseData data;
@@ -29,7 +30,7 @@ FirebaseConfig config;
 
 //Object of the class BluBlueDot_BME280, instances of sensor bme280
 BlueDot_BME280 bme280 = BlueDot_BME280();
-
+DHTesp dht;
 //variables
 bool isFirebaseConnected;
 unsigned long sendDataPrevMillis = 0;
@@ -38,6 +39,7 @@ float temp = 0.f;
 float temp1 = 0.f;
 float pres = 0.f;
 float att = 0.f;
+uint8_t DHTPin = D7;
 
 void setup()
 {
@@ -93,10 +95,11 @@ void setup()
   bme280.parameter.IIRfilter = 0b100;         //Setup for IIR Filter
   bme280.parameter.tempOversampling = 0b101;  //Setup Temperature Ovesampling
   bme280.parameter.pressOversampling = 0b101; //Setup Pressure Ovesampling
-  bme280.parameter.tempOutsideCelsius = 15;   //default value of 15°C
-  bme280.parameter.tempOutsideFahrenheit = 59;
+  bme280.parameter.tempOutsideCelsius = 15;    //default value of 15°C
   bme280.parameter.pressureSeaLevel = 1013.25; // pressure on sea level in Poland has 1013,25 hPa
   bme280.init();
+  /*DHT11*/
+  dht.setup(DHTPin, DHTesp::DHT11); //
 }
 
 void loop()
@@ -111,6 +114,7 @@ void loop()
       temp1 = bme280.readTempF();
       pres = bme280.readPressure();
       att = bme280.readAltitudeMeter();
+
       Serial.println("------BME280 readout------");
       Serial.print("Temp in *C : \t");
       Serial.print(temp);
@@ -121,6 +125,34 @@ void loop()
       Serial.print("\tAltitude: ");
       Serial.print(att);
       Serial.println("\t\t->SEND!");
+      Serial.println("------DHT11 readout------");
+      float humidity = dht.getHumidity();
+      float temperature = dht.getTemperature();
+      Serial.print("Humidity (%): ");
+      Serial.print(humidity);
+      Serial.print("\t");
+      Serial.print("Temperature (C): ");
+      Serial.print(temperature);
+      Serial.print("\t");
+      Serial.println();
+    }
+    else
+    {
+      Serial.println("FAILED");
+      Serial.println("REASON: " + data.errorReason());
+    }
+    float humidity = dht.getHumidity();
+    float temperature = dht.getTemperature();
+    if (Firebase.RTDB.setFloat(&data, "DHT11/Temp C", temperature) && Firebase.RTDB.setFloat(&data, "DHT11/Humidity ", humidity))
+    {
+      Serial.println("------DHT11 readout------");
+      Serial.print("Humidity (%): ");
+      Serial.print(humidity);
+      Serial.print("\t");
+      Serial.print("Temperature (C): ");
+      Serial.print(temperature);
+      Serial.print("\t");
+      Serial.println();
     }
     else
     {
