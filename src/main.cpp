@@ -5,6 +5,8 @@
 #include <Firebase_ESP_Client.h>
 #include <BlueDot_BME280.h>
 #include "DHTesp.h"
+#include "OneWire.h"
+#include <DallasTemperature.h>
 //Provide the token generation process info.
 #include "addons/TokenHelper.h"
 //Provide the RTDB payload printing info and other helper functions.
@@ -16,21 +18,17 @@
 #define EMAIL ""
 #define PASSWORD ""
 
-#define API_KEY "AIzaSyCb8ebThdsGcFKk0XHxxmYez177m-a-pXA"
+#define API_KEY "AIzaSyD0U8kw0nuIvuHegfdQAFug6IakObHsZM4"
 
 // Insert RTDB URLefine the RTDB URL */
-#define DATABASE_URL "https://esp-firebase-1903d-default-rtdb.europe-west1.firebasedatabase.app/"
+#define DATABASE_URL "https://esp-firebase-c201c-default-rtdb.europe-west1.firebasedatabase.app/"
 
-#define DHTTYPE DHT11 // DHT 11
-
+#define ADC_LH_DEF (100.0f / 1024.0f)
 //Firebase Data Objects
 FirebaseData data;
 FirebaseAuth auth;
 FirebaseConfig config;
 
-//Object of the class BluBlueDot_BME280, instances of sensor bme280
-BlueDot_BME280 bme280 = BlueDot_BME280();
-DHTesp dht;
 //variables
 bool isFirebaseConnected;
 unsigned long sendDataPrevMillis = 0;
@@ -40,6 +38,17 @@ float temp1 = 0.f;
 float pres = 0.f;
 float att = 0.f;
 uint8_t DHTPin = D7;
+uint8_t WaterSensorPin = A0;
+uint8_t WaterSensorPowerPin = D5;
+uint8_t DallasPin = D6;
+
+//Object of the class BluBlueDot_BME280, instances of sensor bme280
+BlueDot_BME280 bme280 = BlueDot_BME280();
+DHTesp dht;
+
+//Objects of the class DallasTemperature instances of sensor DS18B20
+OneWire oneWire(DallasPin);
+DallasTemperature sensors(&oneWire);
 
 void setup()
 {
@@ -92,14 +101,19 @@ void setup()
   bme280.parameter.sensorMode = 0b11; //Choose sensor mode as NORMAL
   /*The IIR (Infinite Impulse Response) filter suppresses high frequency fluctuations
   In short, a high factor value means less noise, but measurements are also less responsive*/
-  bme280.parameter.IIRfilter = 0b100;         //Setup for IIR Filter
-  bme280.parameter.tempOversampling = 0b101;  //Setup Temperature Ovesampling
-  bme280.parameter.pressOversampling = 0b101; //Setup Pressure Ovesampling
+  bme280.parameter.IIRfilter = 0b100;          //Setup for IIR Filter
+  bme280.parameter.tempOversampling = 0b101;   //Setup Temperature Ovesampling
+  bme280.parameter.pressOversampling = 0b101;  //Setup Pressure Ovesampling
   bme280.parameter.tempOutsideCelsius = 15;    //default value of 15°C
   bme280.parameter.pressureSeaLevel = 1013.25; // pressure on sea level in Poland has 1013,25 hPa
   bme280.init();
   /*DHT11*/
   dht.setup(DHTPin, DHTesp::DHT11); //
+  /*OneWire*/
+  sensors.begin();
+  /*Water Sensor*/
+  pinMode(WaterSensorPowerPin, OUTPUT); //power the sensor only when reading data
+  digitalWrite(WaterSensorPowerPin, LOW);
 }
 
 void loop()
@@ -125,9 +139,17 @@ void loop()
       Serial.print("\tAltitude: ");
       Serial.print(att);
       Serial.println("\t\t->SEND!");
+    }
+    else
+    {
+      Serial.println("FAILED");
+      Serial.println("REASON: " + data.errorReason());
+    }
+    float humidity = dht.getHumidity();
+    float temperature = dht.getTemperature();
+    if (Firebase.RTDB.setFloat(&data, "DHT11/Temp C", temperature) && Firebase.RTDB.setFloat(&data, "DHT11/Humidity", humidity))
+    {
       Serial.println("------DHT11 readout------");
-      float humidity = dht.getHumidity();
-      float temperature = dht.getTemperature();
       Serial.print("Humidity (%): ");
       Serial.print(humidity);
       Serial.print("\t");
@@ -141,18 +163,54 @@ void loop()
       Serial.println("FAILED");
       Serial.println("REASON: " + data.errorReason());
     }
-    float humidity = dht.getHumidity();
-    float temperature = dht.getTemperature();
-    if (Firebase.RTDB.setFloat(&data, "DHT11/Temp C", temperature) && Firebase.RTDB.setFloat(&data, "DHT11/Humidity ", humidity))
+
+    sensors.requestTemperatures();
+    float tempDallasC = sensors.getTempCByIndex(0);
+    float tempDallasF = sensors.getTempFByIndex(0);
+
+    if (Firebase.RTDB.setFloat(&data, "Dallas DS12B20/Temp C", tempDallasC) && Firebase.RTDB.setFloat(&data, "Dallas DS12B20/Temp F", tempDallasF))
     {
-      Serial.println("------DHT11 readout------");
-      Serial.print("Humidity (%): ");
-      Serial.print(humidity);
-      Serial.print("\t");
-      Serial.print("Temperature (C): ");
-      Serial.print(temperature);
-      Serial.print("\t");
-      Serial.println();
+      Serial.println("------Dallas readout------");
+      Serial.print("Temp in *C : \t");
+      Serial.print(tempDallasC);
+      Serial.print("ºC");
+      Serial.print("\tTemp in F : ");
+      Serial.print(tempDallasF);
+      Serial.println("ºF");
+    }
+    else
+    {
+      Serial.println("FAILED");
+      Serial.println("REASON: " + data.errorReason());
+    }
+
+    digitalWrite(WaterSensorPowerPin, HIGH);
+    delay(10);
+    int waterValue = 0;
+    waterValue = analogRead(WaterSensorPin);
+    digitalWrite(WaterSensorPowerPin, LOW);
+
+    if (Firebase.RTDB.setFloat(&data, "WaterSensor/ADC Readout value", waterValue))
+    {
+      Serial.println("------Water Sensor readout------");
+      Serial.print("Water sensor value: ");
+      Serial.println(waterValue);
+    }
+    else
+    {
+      Serial.println("FAILED");
+      Serial.println("REASON: " + data.errorReason());
+    }
+    delay(100);
+    int lightness = 0;
+    lightness = ADC_LH_DEF * analogRead(WaterSensorPin);
+
+    if (Firebase.RTDB.setFloat(&data, "Fotoresistor/Ligntness percent", lightness))
+    {
+      Serial.println("------Fotoresistor readout------");
+      Serial.print("Fotoresistor value: ");
+      Serial.print(lightness);
+      Serial.println("%");
     }
     else
     {
