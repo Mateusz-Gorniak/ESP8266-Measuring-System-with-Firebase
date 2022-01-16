@@ -7,6 +7,12 @@ Tutorial-based solution:https://randomnerdtutorials.com/esp8266-nodemcu-firebase
 Thanks to the authors ☺️
 </br>
 ## Circuit sketch
+
+![image](https://user-images.githubusercontent.com/74513162/149683456-17eef1a6-9e6b-4d03-800c-a90bf59c152b.png)
+
 ## Hardware
 <li>ESP8266 development board</li>
-<li>BME280 sensor</li>
+<li>BMP280 sensor</li>
+<li>Water Sensor</li>
+<li>DHT11</li>
+<li>Dallas DS18B20</li>
