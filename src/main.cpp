@@ -2,14 +2,13 @@
 #include <Arduino.h>
 #include <stdio.h>
 #include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
 #include <Firebase_ESP_Client.h>
 #include <BlueDot_BME280.h>
 #include "DHTesp.h"
 #include "OneWire.h"
 #include <DallasTemperature.h>
-//Provide the token generation process info.
 #include "addons/TokenHelper.h"
-//Provide the RTDB payload printing info and other helper functions.
 #include "addons/RTDBHelper.h"
 
 //defines
@@ -23,7 +22,6 @@
 // Insert RTDB URLefine the RTDB URL */
 #define DATABASE_URL "https://esp-firebase-c201c-default-rtdb.europe-west1.firebasedatabase.app/"
 
-#define ADC_LH_DEF (100.0f / 1024.0f)
 //Firebase Data Objects
 FirebaseData data;
 FirebaseAuth auth;
@@ -39,8 +37,10 @@ float pres = 0.f;
 float att = 0.f;
 uint8_t DHTPin = D7;
 uint8_t WaterSensorPin = A0;
-uint8_t WaterSensorPowerPin = D5;
+uint8_t WaterSensorPowerPin = D4;
 uint8_t DallasPin = D6;
+uint8_t motionSensor = D5;
+bool motionDetected = false;
 
 //Object of the class BluBlueDot_BME280, instances of sensor bme280
 BlueDot_BME280 bme280 = BlueDot_BME280();
@@ -185,6 +185,7 @@ void loop()
     }
 
     digitalWrite(WaterSensorPowerPin, HIGH);
+    //supply via digital pin for watersensor to measurment
     delay(10);
     int waterValue = 0;
     waterValue = analogRead(WaterSensorPin);
@@ -195,22 +196,6 @@ void loop()
       Serial.println("------Water Sensor readout------");
       Serial.print("Water sensor value: ");
       Serial.println(waterValue);
-    }
-    else
-    {
-      Serial.println("FAILED");
-      Serial.println("REASON: " + data.errorReason());
-    }
-    delay(100);
-    int lightness = 0;
-    lightness = ADC_LH_DEF * analogRead(WaterSensorPin);
-
-    if (Firebase.RTDB.setFloat(&data, "Fotoresistor/Ligntness percent", lightness))
-    {
-      Serial.println("------Fotoresistor readout------");
-      Serial.print("Fotoresistor value: ");
-      Serial.print(lightness);
-      Serial.println("%");
     }
     else
     {
