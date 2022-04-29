@@ -12,8 +12,8 @@
 #include "addons/RTDBHelper.h"
 
 //defines
-#define WIFI_SSID "ARRIS-85BF"
-#define WIFI_PASSWORD "F56548EE0798580A"
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
 #define EMAIL ""
 #define PASSWORD ""
 
